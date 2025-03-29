@@ -1,6 +1,45 @@
 # Knowledge Graph Memory Server
 A basic implementation of persistent memory using a local knowledge graph. This lets Claude remember information about the user across chats.
 
+## Installation
+
+You can install the server using npm:
+
+```bash
+npm install -g @beanone/knowledge-graph
+```
+
+Or use it directly with npx:
+
+```bash
+npx @beanone/knowledge-graph
+```
+
+For Docker users, you can build and run the container:
+
+```bash
+# Build the image
+docker build -t mcp/memory .
+
+# Run with volume mount for persistence
+docker run -i -v claude-memory:/app/dist --rm mcp/memory
+```
+
+## Storage Behavior
+
+The server supports two storage modes:
+
+### Default Mode
+- Stores `memory.json` in the server's installation directory
+- Best for global persistence across different projects
+- Used when running without any flags
+
+### Local Storage Mode
+- Stores `memory.json` in the current working directory
+- Best for project-specific storage
+- Activated using the `--local-storage` flag
+- Automatically creates storage file and directories if they don't exist
+
 ## Core Concepts
 
 ### Entities
@@ -151,16 +190,16 @@ Add this to your claude_desktop_config.json:
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-memory"
+        "@beanone/knowledge-graph"
       ]
     }
   }
 }
 ```
 
-#### NPX with custom setting
+#### NPX with local storage
 
-The server can be configured using the following environment variables:
+For project-specific storage, use the `--local-storage` flag:
 
 ```json
 {
@@ -169,17 +208,40 @@ The server can be configured using the following environment variables:
       "command": "npx",
       "args": [
         "-y",
-        "@modelcontextprotocol/server-memory"
+        "@beanone/knowledge-graph",
+        "--local-storage"
+      ]
+    }
+  }
+}
+```
+
+#### NPX with custom path
+
+The server can be configured using environment variables:
+
+```json
+{
+  "mcpServers": {
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@beanone/knowledge-graph"
       ],
       "env": {
-        "MEMORY_FILE_PATH": "/path/to/custom/memory.json"
+        "MEMORY_FILE_PATH": "/path/to/your/memory.json"
       }
     }
   }
 }
 ```
 
-- `MEMORY_FILE_PATH`: Path to the memory storage JSON file (default: `memory.json` in the server directory)
+The `MEMORY_FILE_PATH` environment variable can be:
+- An absolute path (e.g., `/path/to/memory.json`)
+- A relative path (resolved relative to current working directory with `--local-storage`, or server directory without)
+
+Note: The server will automatically create any necessary directories in the path.
 
 ### System Prompt
 

@@ -1,5 +1,5 @@
 {
-  "name": "@modelcontextprotocol/server-memory",
+  "name": "@beanone/knowledge-graph",
   "version": "0.6.3",
   "description": "MCP server for enabling memory for Claude through a knowledge graph",
   "license": "MIT",
