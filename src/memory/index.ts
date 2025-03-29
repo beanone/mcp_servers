@@ -9,16 +9,12 @@ import {
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import os from 'os';
 
-// Define memory file path using environment variable with fallback
-const defaultMemoryPath = path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');
+console.error('MEMORY_FILE_PATH:', process.env.MEMORY_FILE_PATH);
 
-// If MEMORY_FILE_PATH is just a filename, put it in the same directory as the script
-const MEMORY_FILE_PATH = process.env.MEMORY_FILE_PATH
-  ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
-    ? process.env.MEMORY_FILE_PATH
-    : path.join(path.dirname(fileURLToPath(import.meta.url)), process.env.MEMORY_FILE_PATH)
-  : defaultMemoryPath;
+// Check if --local-storage flag is present
+const useLocalStorage = process.argv.includes('--local-storage');
 
 // We are storing our memory using entities, relations, and observations in a graph structure
 interface Entity {
@@ -40,20 +36,57 @@ interface KnowledgeGraph {
 
 // The KnowledgeGraphManager class contains all operations to interact with the knowledge graph
 class KnowledgeGraphManager {
+  private memoryFilePath: string;
+
+  constructor() {
+    // Log initial environment state
+    console.error('Environment variables:', {
+      MEMORY_FILE_PATH: process.env.MEMORY_FILE_PATH,
+      CWD: process.cwd(),
+      LOCAL_STORAGE: useLocalStorage,
+      ARGS: process.argv
+    });
+
+    // Resolve the memory file path while preserving Docker compatibility
+    const resolvedPath = process.env.MEMORY_FILE_PATH
+      ? path.isAbsolute(process.env.MEMORY_FILE_PATH)
+        ? process.env.MEMORY_FILE_PATH  // Use absolute path as is
+        : path.join(process.cwd(), process.env.MEMORY_FILE_PATH)  // Relative to CWD
+      : useLocalStorage
+        ? path.join(process.cwd(), 'memory.json')  // Local project storage
+        : path.join(path.dirname(fileURLToPath(import.meta.url)), 'memory.json');  // Server directory (Docker compatible)
+
+    this.memoryFilePath = resolvedPath;
+    console.error('Resolved memory file path:', {
+      final: this.memoryFilePath,
+      isAbsolute: path.isAbsolute(this.memoryFilePath),
+      dirname: path.dirname(fileURLToPath(import.meta.url))
+    });
+  }
+
   private async loadGraph(): Promise<KnowledgeGraph> {
     try {
-      const data = await fs.readFile(MEMORY_FILE_PATH, "utf-8");
+      console.error('Loading graph from:', this.memoryFilePath);
+      const data = await fs.readFile(this.memoryFilePath, "utf-8");
       const lines = data.split("\n").filter(line => line.trim() !== "");
-      return lines.reduce((graph: KnowledgeGraph, line) => {
-        const item = JSON.parse(line);
-        if (item.type === "entity") graph.entities.push(item as Entity);
-        if (item.type === "relation") graph.relations.push(item as Relation);
+      
+      return lines.reduce((graph: KnowledgeGraph, line, index) => {
+        try {
+          const item = JSON.parse(line);
+          if (item.type === "entity") graph.entities.push(item);
+          if (item.type === "relation") graph.relations.push(item);
+        } catch (parseError) {
+          console.error(`Failed to parse line ${index + 1}:`, line, parseError);
+          // Continue processing other lines even if one fails
+        }
         return graph;
       }, { entities: [], relations: [] });
     } catch (error) {
       if (error instanceof Error && 'code' in error && (error as any).code === "ENOENT") {
+        console.error('No existing graph file found, starting with empty graph');
         return { entities: [], relations: [] };
       }
+      console.error('Error loading graph:', error);
       throw error;
     }
   }
@@ -61,9 +94,22 @@ class KnowledgeGraphManager {
   private async saveGraph(graph: KnowledgeGraph): Promise<void> {
     const lines = [
       ...graph.entities.map(e => JSON.stringify({ type: "entity", ...e })),
-      ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r })),
+      ...graph.relations.map(r => JSON.stringify({ type: "relation", ...r }))
     ];
-    await fs.writeFile(MEMORY_FILE_PATH, lines.join("\n"));
+    try {
+      // Ensure directory exists
+      const dir = path.dirname(this.memoryFilePath);
+      console.error('Creating directory if needed:', dir);
+      await fs.mkdir(dir, { recursive: true });
+      
+      // Write the file line by line
+      console.error('Saving graph to:', this.memoryFilePath);
+      await fs.writeFile(this.memoryFilePath, lines.join("\n") + "\n");  // Add newline at end of file
+      console.error('Graph saved successfully');
+    } catch (error) {
+      console.error("Error saving knowledge graph:", error);
+      throw error;
+    }
   }
 
   async createEntities(entities: Entity[]): Promise<Entity[]> {
@@ -410,10 +456,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error("Knowledge Graph MCP Server running on stdio");
+  console.error("Knowledge Graph MCP Server started");
 }
 
 main().catch((error) => {
-  console.error("Fatal error in main():", error);
+  console.error("Fatal error:", error);
   process.exit(1);
 });
