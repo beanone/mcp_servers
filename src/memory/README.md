@@ -15,6 +15,12 @@ Or use it directly with npx:
 npx @beanone/knowledge-graph
 ```
 
+Or install directly from git:
+
+```bash
+npx github:beanone/knowledge-graph
+```
+
 For Docker users, you can build and run the container:
 
 ```bash
