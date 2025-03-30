@@ -15,6 +15,12 @@ Or use it directly with npx:
 npx @beanone/knowledge-graph
 ```
 
+Or install directly from git:
+
+```bash
+npm install -g github:beanone/mcp_servers#main:src/memory
+```
+
 For Docker users, you can build and run the container:
 
 ```bash
